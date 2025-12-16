@@ -1,11 +1,12 @@
 from sqlalchemy import Column, Integer, String, Float
 from backend.config import Base
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
+from typing import Any
 
 class PatientModel(Base):
     __tablename__ = "patient"
 
-    id = Column("index", Integer, primary_key=True, index=True)
+    id = Column("id", Integer, primary_key=True, index=True)
 
     full_name = Column("ПІБ", String)
     phone = Column("Телефон", String)
@@ -63,6 +64,24 @@ class PatientBase(BaseModel):
     full_name: str
     phone: str
     age: int
+
+    @field_validator(
+        'gender', 'histology_type', 'ef',
+        'vch_pl', 'nch_pl', 'pT', 'pN', 'pM',
+        'copd', 'tbc', 'chest_trauma', 'emphysema', 'hypertension',
+        'arrhythmia', 'ihd', 'ecg_changes', 'neurology', 'diabetes',
+        'kidney_issues_creat', 'kidney_issues_norm', 'gi_disease',
+        'vascular_disorders', 'other_diseases', 'second_cancer',
+        'extension', 'pulmon',
+        mode='before'
+    )
+    @classmethod
+    def force_string(cls, v: Any) -> str:
+        # Перетворюємо все в рядок, якщо воно не None
+        if v is None:
+            return ""  # Або return None, якщо поле Optional
+        return str(v)
+
     gender: str
     bmi: float
     vch_pl: str
