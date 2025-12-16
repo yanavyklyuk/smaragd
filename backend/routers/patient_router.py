@@ -26,3 +26,7 @@ def create_patient(patient: PatientBase, db: Session = Depends(get_db)):
 @router.put("/{patient_id}", response_model=PatientResponse)
 def update_patient(patient_id: int, patient: PatientBase, db: Session = Depends(get_db)):
     return patient_controller.edit_patient(patient_id, patient, db)
+
+@router.delete("/{patient_id}")
+def delete_patient(patient_id: int, db: Session = Depends(get_db)):
+    return patient_controller.remove_patient(patient_id, db)

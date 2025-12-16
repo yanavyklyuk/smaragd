@@ -25,3 +25,10 @@ def update_patient(db: Session, patient_id: int, patient_data: PatientBase):
         db.commit()
         db.refresh(patient)
     return patient
+
+def delete_patient(db: Session, patient_id: int):
+    patient = db.query(PatientModel).filter(PatientModel.id == patient_id).first()
+    if patient:
+        db.delete(patient)
+        db.commit()
+    return patient

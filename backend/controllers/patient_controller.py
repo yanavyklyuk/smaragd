@@ -20,3 +20,9 @@ def edit_patient(patient_id: int, patient_data: PatientBase, db: Session):
     if updated_patient is None:
         raise HTTPException(status_code=404, detail="Patient not found")
     return updated_patient
+
+def remove_patient(patient_id: int, db: Session):
+    patient = patient_service.delete_patient(db, patient_id)
+    if patient is None:
+        raise HTTPException(status_code=404, detail="Patient not found")
+    return {"message": f"Patient {patient_id} deleted successfully"}
