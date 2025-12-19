@@ -15,6 +15,10 @@ router = APIRouter(
 def get_patients(db: Session = Depends(get_db)):
     return patient_controller.read_patients(db)
 
+@router.get("/search", response_model=List[PatientResponse])
+def search_patients(full_name: str, db: Session = Depends(get_db)):
+    return patient_controller.find_patients_by_name(full_name, db)
+
 @router.get("/{patient_id}", response_model=PatientResponse)
 def get_patient(patient_id: int, db: Session = Depends(get_db)):
     return patient_controller.read_patient(patient_id, db)

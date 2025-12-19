@@ -12,6 +12,9 @@ def read_patient(patient_id: int, db: Session):
         raise HTTPException(status_code=404, detail="Patient not found")
     return patient
 
+def find_patients_by_name(full_name: str, db: Session):
+    return patient_service.get_patients_by_name(db, full_name)
+
 def add_patient(patient_data: PatientBase, db: Session):
     return patient_service.create_patient(db, patient_data)
 

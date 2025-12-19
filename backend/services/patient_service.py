@@ -7,6 +7,9 @@ def get_all_patients(db: Session):
 def get_patient_by_id(db: Session, patient_id: int):
     return db.query(PatientModel).filter(PatientModel.id == patient_id).first()
 
+def get_patients_by_name(db: Session, full_name: str):
+    return db.query(PatientModel).filter(PatientModel.full_name.ilike(f"%{full_name}%")).all()
+
 def create_patient(db: Session, patient_data: PatientBase):
     new_patient = PatientModel(**patient_data.model_dump())
 
