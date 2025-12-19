@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from backend.config import engine, Base
-from backend.routers import patient_router
+from backend.routers import patient_router, ml_router
 
 Base.metadata.create_all(bind=engine)
 
@@ -23,6 +23,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 app.include_router(patient_router.router)
+app.include_router(ml_router.router)
 
 @app.get("/")
 def root():
