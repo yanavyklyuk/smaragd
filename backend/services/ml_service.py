@@ -6,20 +6,16 @@ from typing import Dict, Any
 from pathlib import Path
 from backend.models.patient import PatientBase
 
-# --- 1. ШЛЯХИ ДО МОДЕЛЕЙ ---
 CURRENT_DIR = Path(__file__).resolve().parent
 MODELS_DIR = CURRENT_DIR.parent / "ml_models"
 
 HOSP_MODEL_PATH = MODELS_DIR / "model_hospitalisation.pkl"
 BED_MODEL_PATH = MODELS_DIR / "model_complication.pkl"
 
-# --- 2. СЛОВНИК ПЕРЕКЛАДУ (МАПІНГ) ---
-# Ключ: Назва в коді (Pydantic / English)
-# Значення: Назва в моделі (Pandas / Cyrillic)
 COLUMN_MAPPING = {
     "full_name": "ПІБ",
     "phone": "Телефон",
-    "age": "Вік ",  # У твоєму списку це "Вік" (без пробілу в кінці)
+    "age": "Вік ",
     "gender": "Стать",
     "bmi": "ІМТ",
     "vch_pl": "вч п+л",
@@ -65,7 +61,6 @@ COLUMN_MAPPING = {
     "min_vol": "хв"
 }
 
-
 class MLService:
     def __init__(self):
         self.hosp_artifact = {}
@@ -76,58 +71,43 @@ class MLService:
         try:
             if HOSP_MODEL_PATH.exists():
                 self.hosp_artifact = joblib.load(HOSP_MODEL_PATH)
-                print(f"✅ Hospitalization model loaded: {self.hosp_artifact.get('model_name')}")
+                print(f"Hospitalization model loaded: {self.hosp_artifact.get('model_name')}")
             else:
-                print(f"❌ File not found: {HOSP_MODEL_PATH}")
+                print(f"File not found: {HOSP_MODEL_PATH}")
 
             if BED_MODEL_PATH.exists():
                 self.comp_artifact = joblib.load(BED_MODEL_PATH)
-                print(f"✅ Complication model loaded: {self.comp_artifact.get('model_name')}")
+                print(f"Complication model loaded: {self.comp_artifact.get('model_name')}")
             else:
-                print(f"❌ File not found: {BED_MODEL_PATH}")
+                print(f"File not found: {BED_MODEL_PATH}")
 
         except Exception as e:
-            print(f"⚠️ Error loading ML models: {e}")
+            print(f"Error loading ML models: {e}")
             self.hosp_artifact = None
             self.comp_artifact = None
 
     def _prepare_data(self, patient_data: PatientBase, feature_list: list) -> pd.DataFrame:
-        """
-        Конвертує Pydantic -> Dict -> Rename Keys (Eng->Ukr) -> Filter Columns -> DataFrame
-        """
-        # 1. Отримуємо дані англійською
         raw_data = patient_data.model_dump()
 
-        # 2. Створюємо словник з кириличними ключами
         mapped_data = {}
         for eng_key, value in raw_data.items():
-            # Шукаємо переклад, якщо немає - лишаємо як є
             cyr_key = COLUMN_MAPPING.get(eng_key, eng_key)
             mapped_data[cyr_key] = value
 
-        # 3. Перевіряємо та додаємо відсутні колонки (якщо раптом якихось даних немає в запиті, але треба моделі)
-        # Це захист від падіння, якщо feature_list має щось екзотичне
         for feature in feature_list:
             if feature not in mapped_data:
-                # Спробуємо знайти, може ключ вже правильний
                 if feature in raw_data:
                     mapped_data[feature] = raw_data[feature]
                 else:
-                    # Якщо взагалі немає даних - заповнюємо нулем або пустим рядком, щоб не впало
-                    # (хоча краще валідувати на вході)
                     mapped_data[feature] = 0
-                    print(f"⚠️ Warning: Missing value for '{feature}', filling with 0")
+                    print(f"Warning: Missing value for '{feature}', filling with 0")
 
-        # 4. Створюємо DataFrame, обираючи ТІЛЬКИ ті колонки, які знає модель
-        # Важливо зберегти порядок колонок, хоча Scikit-learn зазвичай дивиться на назви
         try:
             df = pd.DataFrame([mapped_data])
-            # Залишаємо тільки потрібні колонки
             df_final = df[feature_list]
             return df_final
         except KeyError as e:
-            # Це допоможе зрозуміти, якої саме колонки ще не вистачає в мапінгу
-            print(f"🔥 Critical Error: Model expects column {e}, but mapping failed.")
+            print(f"Critical Error: Model expects column {e}, but mapping failed.")
             print(f"Available mapped columns: {list(mapped_data.keys())}")
             raise e
 
@@ -139,11 +119,9 @@ class MLService:
         threshold = artifact["threshold"]
         features = artifact["features"]
 
-        # Готуємо дані вже з правильними іменами
         df = self._prepare_data(patient_data, features)
 
         try:
-            # Спробуємо отримати ймовірність
             if hasattr(pipeline, "predict_proba"):
                 probs = pipeline.predict_proba(df)
                 probability = probs[0][1]
@@ -154,7 +132,6 @@ class MLService:
             print(f"Prediction logic error: {e}")
             raise e
 
-        # Використовуємо кастомний поріг
         pred_class = 1 if probability >= threshold else 0
 
         return int(pred_class), float(probability)
@@ -171,17 +148,33 @@ class MLService:
         model = pipeline.named_steps['classifier']
         preprocessor = pipeline.named_steps['preprocessor']
 
-        # Трансформація даних
         transformed_data = preprocessor.transform(df)
 
-        # Отримання назв фіч після трансформації
-        try:
-            feature_names = preprocessor.get_feature_names_out()
-        except AttributeError:
-            feature_names = [f"feat_{i}" for i in range(transformed_data.shape[1])]
+        if hasattr(transformed_data, "toarray"):
+            transformed_data = transformed_data.toarray()
 
-        # SHAP
-        explainer = shap.LinearExplainer(model, transformed_data)
+        feature_names = []
+        try:
+            feature_names = list(preprocessor.get_feature_names_out())
+        except Exception:
+            try:
+                feature_names = list(preprocessor.get_feature_names_out(features))
+            except Exception:
+                if transformed_data.shape[1] == len(features):
+                    feature_names = features
+                else:
+                    feature_names = [f"feat_{i}" for i in range(transformed_data.shape[1])]
+
+        clean_names = []
+        for name in feature_names:
+            name = str(name).replace("numerical__", "").replace("categorical__", "") \
+                .replace("remainder__", "").replace("ord_encoder__", "")
+            clean_names.append(name)
+        feature_names = clean_names
+
+        background = np.zeros((1, transformed_data.shape[1]))
+
+        explainer = shap.LinearExplainer(model, background)
         shap_values = explainer.shap_values(transformed_data)
 
         vals = shap_values
@@ -192,9 +185,18 @@ class MLService:
             vals = vals[0]
 
         explanation_list = []
-        for name, value in zip(feature_names, vals):
-            if abs(value) > 0.001:
-                explanation_list.append({"feature": name, "value": float(value)})
+
+        limit = min(len(feature_names), len(vals))
+
+        for i in range(limit):
+            name = feature_names[i]
+            value = vals[i]
+
+            if abs(value) > 1e-9:
+                explanation_list.append({
+                    "feature": name,
+                    "value": float(value)
+                })
 
         explanation_list.sort(key=lambda x: abs(x["value"]), reverse=True)
 
@@ -207,7 +209,6 @@ class MLService:
             "contributions": explanation_list[:20]
         }
 
-    # === PUBLIC METHODS ===
     def predict_hospitalization(self, patient: PatientBase):
         return self._predict_from_artifact(self.hosp_artifact, patient)
 
